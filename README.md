@@ -25,6 +25,8 @@ kubectl create secret generic route53-aws-credentials -n route53-updater --from-
 
 *Periodic execution interval and TTL are both configured by default to 60 seconds. Values can be changed using TTL and RUN_INTERVAL environment variables*
 
+Sample files can be found [here](https://github.com/anvibo/route53-updater/tree/master/examples)
+
 ```yaml
 apiVersion: v1
 kind: Namespace
