@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: route53-updater
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: route53-updater-sa
+  namespace: route53-updater
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: route53-updater-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: route53-updater-clusterrole-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: route53-updater-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: route53-updater-sa
+    namespace: route53-updater
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: route53-updater-deploy
+  namespace: route53-updater
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: route53-updater
+    spec:
+      serviceAccountName: route53-updater-sa
+      containers:
+        - name: route53-updater
+          image: anvibo/route53-updater:1.0
+          imagePullPolicy: Always
+          command: ["python", "-u", "/app/route53-updater.py"]
+          env:
+            - name: HOSTED_ZONE_ID
+              value: Z3MB518HQ4RMQ8
+            - name: DNS_RECORD
+              value: prod-b.anvibo.com
+          volumeMounts:
+          - name: service-key
+            mountPath: /root/.aws
+      volumes:
+      - name: service-key
+        secret:
+          secretName: route53-aws-credentials
