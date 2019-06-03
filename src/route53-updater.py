@@ -124,14 +124,15 @@ if hosted_zone_id != 'none' and base_url != 'none':
         r = route53_client.list_resource_record_sets(HostedZoneId=hosted_zone_id)
 
         for i in r['ResourceRecordSets']:
-            if i['Name'] == base_url and i['Type'] == 'A':
-                if i['SetIdentifier'] not in ips:
-                    
-                    remove_rs(i['SetIdentifier'], i['HealthCheckId'])
-                    
-                    remove_hc(i['SetIdentifier'], i['HealthCheckId'])
-                else:
-                    ips.remove(i['SetIdentifier'])
+            if i['Type'] == 'A':
+                print("Checking existing recordSet: " + str(i))
+                if base_url in i['Name']:
+                    if i['SetIdentifier'] not in ips:
+                        remove_rs(i['SetIdentifier'], i['HealthCheckId'])
+                        
+                        remove_hc(i['SetIdentifier'], i['HealthCheckId'])
+                    else:
+                        ips.remove(i['SetIdentifier'])
 
         for ip in ips:
             hc = create_hc(ip)
