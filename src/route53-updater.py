@@ -126,7 +126,7 @@ if hosted_zone_id != 'none' and base_url != 'none':
         for i in r['ResourceRecordSets']:
             if i['Type'] == 'A':
                 print("Checking existing recordSet: " + str(i))
-                if base_url in i['Name']:
+                if i['Name'] == base_url + ".":
                     if i['SetIdentifier'] not in ips:
                         remove_rs(i['SetIdentifier'], i['HealthCheckId'])
                         
