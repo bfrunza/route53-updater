@@ -1,4 +1,4 @@
-def call(){
+def getAgent(){
 agent =  """
   apiVersion: v1
   kind: Pod
