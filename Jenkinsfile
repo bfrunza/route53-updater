@@ -15,7 +15,7 @@ agent =  """
          mountPath: /var/run/docker.sock
        command:
        - cat
-         tty: true
+       tty: true
        volumes:
        - name: docker-sock-volume
          hostPath:
