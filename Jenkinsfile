@@ -25,18 +25,12 @@ return agent
 }
 
 pipeline {
-  agent {
-    kubernetes {
-      label 'jenkins-slave'
-      defaultContainer 'jenkins-slave'
-      yaml getAgent()
+    agent any 
+    stages {
+        stage('Stage 1') {
+            steps {
+                echo 'Hello world!' 
+            }
+        }
     }
-  }
-  stages{
-     stage ('stage1'){
-       steps{
-        def customImage = docker.build("my-image:${env.BUILD_ID}")
-       }
-     }
-  }
 }
