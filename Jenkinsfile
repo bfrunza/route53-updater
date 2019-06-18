@@ -1,6 +1,16 @@
-node {
-    checkout scm
-    
-    def customImage = docker.build("my-image:${env.BUILD_ID}")
-
+pipeline {
+  agent {
+    kubernetes {
+      label 'jenkins-slave'
+      defaultContainer 'jenkins-slave'
+      yaml getAgent()
+    }
+  }
+  stages{
+     stage ('stage1'){
+       steps{
+        // Define custom steps as per requirement
+       }
+     }
+  }
 }
