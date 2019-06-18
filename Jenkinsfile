@@ -1,3 +1,29 @@
+def call(){
+agent =  """
+  apiVersion: v1
+  kind: Pod
+  metadata:
+   labels:
+     name: jenkins-slave
+   spec:
+     containers:
+     - name: jenkins-slave 
+       image: jenkinsci/jnlp-slave
+       workingDir: /home/jenkins
+       volumeMounts:
+       - name: docker-sock-volume
+         mountPath: /var/run/docker.sock
+       command:
+       - cat
+         tty: true
+       volumes:
+       - name: docker-sock-volume
+         hostPath:
+         path: /var/run/docker.sock
+"""
+return agent
+}
+
 pipeline {
   agent {
     kubernetes {
@@ -9,7 +35,7 @@ pipeline {
   stages{
      stage ('stage1'){
        steps{
-        // Define custom steps as per requirement
+        def customImage = docker.build("my-image:${env.BUILD_ID}")
        }
      }
   }
