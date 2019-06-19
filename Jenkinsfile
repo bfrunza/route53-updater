@@ -19,10 +19,12 @@ spec:
 """
   ) {
 
-  def image = "anvibo/route53-updater:123"
+  def image = "anvibo/route53-updater"
   node(label) {
-    stage('Build Docker image') {
+    stage('Cloning Git') {
       git 'https://github.com/anvibo/route53-updater.git'
+    }
+    stage('Build Docker image') {
       container('docker') {
         sh "docker build -t ${image} ."
       }
