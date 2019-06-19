@@ -2,7 +2,7 @@
 pipeline {
    environment {
     registry = "anvibo/route53-updater"
-    registryCredential = ‘dockerhub’
+    registryCredential = 'dockerhub'
   }
 
   agent {
