@@ -3,6 +3,7 @@ pipeline {
    environment {
     registry = "anvibo/route53-updater"
     registryCredential = 'dockerhub'
+    dockerImage = ''
   }
 
   agent {
@@ -38,10 +39,26 @@ spec:
         container('docker') {
                 withDockerRegistry(registry: [credentialsId: 'dockerhub']) {
                   script {
-                    docker.build registry + ":$BUILD_NUMBER"
+                    dockerImage = docker.build registry + ":$BUILD_NUMBER"
                   }
                 }
             }
+      }
+    }
+    stage('Push image') {
+      steps{
+        container('docker') {
+                withDockerRegistry(registry: [credentialsId: 'dockerhub']) {
+                  script {
+                    dockerImage.push()
+                  }
+                }
+            }
+      }
+    }
+    stage('Remove Unused docker image') {
+      steps{
+        sh "docker rmi $registry:$BUILD_NUMBER"
       }
     }
   }
