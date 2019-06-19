@@ -35,8 +35,10 @@ pipeline {
   stages{
      stage ('stage1'){
        steps {
+         script {
                 echo 'Hello world!'
                 docker.build("anvibo/route53-updater")
+         }
        }
      }
   }
