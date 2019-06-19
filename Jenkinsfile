@@ -37,7 +37,9 @@ spec:
       steps{
         container('docker') {
                 withDockerRegistry(registry: [credentialsId: 'dockerhub']) {
+                  script {
                     docker.build registry + ":$BUILD_NUMBER"
+                  }
                 }
             }
       }
