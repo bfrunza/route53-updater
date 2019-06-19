@@ -19,15 +19,26 @@ spec:
 """
   ) {
 
-  def image = "anvibo/route53-updater"
-  node(label) {
+  pipeline {
+  environment {
+    registry = "anvibo/route53-updater"
+    registryCredential = ‘dockerhub’
+  }
+  agent any
+  stages {
     stage('Cloning Git') {
-      git 'https://github.com/anvibo/route53-updater.git'
+      steps {
+        git 'https://github.com/anvibo/route53-updater.git'
+      }
     }
-    stage('Build Docker image') {
-      container('docker') {
-        sh "docker build -t ${image} ."
+    stage('Building image') {
+      steps{
+        script {
+          docker.build registry + ":$BUILD_NUMBER"
+        }
       }
     }
   }
+}
+
 }
