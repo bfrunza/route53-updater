@@ -8,7 +8,7 @@ agent =  """
    spec:
      containers:
      - name: jenkins-slave 
-       image: jenkinsci/jnlp-slave
+       image: anvibo/docker-jenkins-slave
        workingDir: /home/jenkins
        volumeMounts:
        - name: docker-sock-volume
@@ -35,7 +35,8 @@ pipeline {
   stages{
      stage ('stage1'){
        steps {
-                echo 'Hello world!' 
+                echo 'Hello world!'
+                docker.build
        }
      }
   }
