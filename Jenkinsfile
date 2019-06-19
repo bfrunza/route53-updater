@@ -1,8 +1,13 @@
 
 pipeline {
+   environment {
+    registry = "anvibo/route53-updater"
+    registryCredential = ‘dockerhub’
+  }
+
   agent {
     kubernetes {
-      label 'declarativeFromYaml'
+      label 'jenkins-docker'
       yaml """
 apiVersion: v1
 kind: Pod
@@ -32,7 +37,7 @@ spec:
       steps{
         container('docker') {
                 withDockerRegistry(registry: [credentialsId: 'dockerhub']) {
-                    sh 'hostname'
+                    docker.build registry + ":$BUILD_NUMBER"
                 }
             }
       }
