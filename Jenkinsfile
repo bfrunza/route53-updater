@@ -19,10 +19,10 @@ spec:
 """
   ) {
 
-  def image = "jenkins/jnlp-slave"
+  def image = "anvibo/route53-updater"
   node(label) {
     stage('Build Docker image') {
-      git 'https://github.com/jenkinsci/docker-jnlp-slave.git'
+      git 'https://github.com/anvibo/route53-updater.git'
       container('docker') {
         sh "docker build -t ${image} ."
       }
