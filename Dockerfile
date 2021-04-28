@@ -1,5 +1,6 @@
 FROM python
 
-RUN pip install -r requirements.txt
+ADD requirements.txt /tmp/
+RUN pip install -r /tmp/requirements.txt
 
 ADD src/route53-updater.py /app/
