@@ -1,21 +1,24 @@
 #!/usr/local/bin/python
 
 import boto3
-import time
 import os
+import yaml
+import json
 from kubernetes import client, config
 
 hosted_zone_id = os.getenv('HOSTED_ZONE_ID', 'none')
 base_url = os.getenv('DNS_RECORD', 'none')
 ttl = int(os.getenv('TTL', 60))
+tag = os.getenv('TAG', 'none')
+config_file = os.getenv('CONFIG_PATH', '')
 run_interval = int(os.getenv('RUN_INTERVAL', 60))
 create_health_checks = os.getenv('CREATE_HEALTH_CHECKS', 'False')
 
 
-def remove_hc(ip, healthcheck):
+def remove_hc(healthcheck):
     response = route53_client.delete_health_check(HealthCheckId=healthcheck)
 
-    print("Removing healthcheck: ip=", ip, ", id=", healthcheck,
+    print("Removing healthcheck:", healthcheck,
           ", response=", str(response), sep='')
 
 
@@ -34,40 +37,48 @@ def get_cluster_ips():
     return ips
 
 
-def remove_rs(ip, healthcheck=None):
-    change_batch = {
-        'Changes': [
-            {
-                'Action': 'DELETE',
-                'ResourceRecordSet': {
-                    'Name': base_url,
-                    'Type': 'A',
-                    'TTL': ttl,
-                    'SetIdentifier': ip,
-                    'Weight': 1,
-                    'ResourceRecords': [
-                        {
-                            'Value': ip
-                        },
-                    ],
-                }
-            },
-        ]
-        }
-    if healthcheck:
-        change_batch['Changes'][0]['HealthCheckId'] = healthcheck
+def get_cluster_ips_test():
+    ips = list()
+    ips.append('34.90.163.32')
 
-    response = route53_client.change_resource_record_sets(
-        HostedZoneId=hosted_zone_id,
-        ChangeBatch=change_batch)
+    return ips
 
-    print("Removing recordSet: ip=" + ip + ", response=" + str(response))
+
+def cleanup_recordsets(zone, cleanup_records):
+    if len(cleanup_ips):
+        for record in cleanup_records:
+            change_batch = {
+                'Changes': [
+                    {
+                        'Action': 'DELETE',
+                        'ResourceRecordSet': {
+                            'Name': record["Name"],
+                            'Type': record["Type"],
+                            'TTL': record["TTL"],
+                            'SetIdentifier': record["SetIdentifier"],
+                            'Weight': 1,
+                            'ResourceRecords': record["ResourceRecords"],
+                        }
+                    },
+                ]
+            }
+            if "HealthCheckId" in record:
+                remove_hc(record["HealthCheckId"])
+                change_batch['Changes'][0]['ResourceRecordSet']['HealthCheckId'] = record["HealthCheckId"]
+
+            resp = route53_client.change_resource_record_sets(
+                HostedZoneId=zone,
+                ChangeBatch=change_batch)
+            print("ZoneId:", zone, "# removed " +
+                  record["Name"] + " -> " + json.dumps(record["ResourceRecords"]), "#", str(resp))
+    else:
+        print("ZoneId:", zone, "# nothing to cleanup")
 
 
 def create_hc(ip):
 
     response = route53_client.create_health_check(
-        CallerReference=ip + "." + str(time.time()),
+        CallerReference=ip,
         HealthCheckConfig={
             'IPAddress': ip,
             'Port': 80,
@@ -81,20 +92,49 @@ def create_hc(ip):
         }
     )
 
-    print("Creating healthcheck: ip=" + ip + ", response=" + str(response))
+    print("created healthcheck: ip=" + ip + ", response=" + str(response))
 
     return response
 
 
-def create_rs(ip, healthcheck=None):
+def create_cname(name, alias, zone_id):
     change_batch = {
         'Changes': [
             {
                 'Action': 'UPSERT',
                 'ResourceRecordSet': {
-                    'Name': base_url,
+                    'Name': name,
+                    'Type': 'CNAME',
+                    'SetIdentifier': tag + "-" + name,
+                    'Weight': 1,
+                    'TTL': ttl,
+                    'ResourceRecords': [
+                        {
+                            'Value': alias
+                        },
+                    ],
+                }
+            },
+        ]
+    }
+
+    response = route53_client.change_resource_record_sets(
+        HostedZoneId=zone_id,
+        ChangeBatch=change_batch)
+
+    print("ZoneId:", zone_id, "# created CNAME " +
+          name + " -> " + alias, "#", str(response))
+
+
+def create_record_set(name, ip, zone_id):
+    change_batch = {
+        'Changes': [
+            {
+                'Action': 'UPSERT',
+                'ResourceRecordSet': {
+                    'Name': name,
                     'Type': 'A',
-                    'SetIdentifier': ip,
+                    'SetIdentifier': tag + "-" + name + "." + ip,
                     'Weight': 1,
                     'TTL': ttl,
                     'ResourceRecords': [
@@ -106,46 +146,91 @@ def create_rs(ip, healthcheck=None):
             },
         ]
     }
-    if healthcheck:
-        change_batch['Changes'][0]['HealthCheckId'] = healthcheck
+    if create_health_checks == 'True':
+        change_batch['Changes'][0]['ResourceRecordSet']['HealthCheckId'] = healthchecks[ip]
 
     response = route53_client.change_resource_record_sets(
-        HostedZoneId=hosted_zone_id,
+        HostedZoneId=zone_id,
         ChangeBatch=change_batch)
 
-    print("Creating recordSet: ip=", ip, ", healthcheck=", healthcheck,
-          ", response=", str(response))
+    print("ZoneId:", zone_id, "# created A " +
+          name + " -> " + ip, "#", str(response))
 
 
-if hosted_zone_id != 'none' and base_url != 'none':
-    while True:
-        print("Running route53-updater")
-        ips = get_cluster_ips()
+print("running route53-updater")
+if config_file == '':
+    exit("CONFIG_PATH not defined")
+ips = get_cluster_ips()
+healthchecks = {}
+with open(config_file) as f:
+    data = yaml.load(f, Loader=yaml.FullLoader)
+    print("config:", data)
 
-        route53_client = boto3.client('route53')
-        r = route53_client.list_resource_record_sets(
-            HostedZoneId=hosted_zone_id)
+    route53_client = boto3.client('route53')
 
-        for i in r['ResourceRecordSets']:
-            if i['Type'] == 'A':
-                print("Checking existing recordSet: " + str(i))
-                if i['Name'] == base_url + ".":
-                    if i['SetIdentifier'] not in ips:
-                        if create_health_checks == 'True':
-                            remove_rs(i['SetIdentifier'], i['HealthCheckId'])
-                            remove_hc(i['SetIdentifier'], i['HealthCheckId'])
-                        else:
-                            remove_rs(i['SetIdentifier'])
-                    else:
-                        ips.remove(i['SetIdentifier'])
+    for zone in data:
+        cleanup_ips = []
+        zone_ips = ips.copy()
+        response = route53_client.list_resource_record_sets(
+            HostedZoneId=zone)
 
-        for ip in ips:
-            if create_health_checks == 'True':
-                hc = create_hc(ip)
-                create_rs(ip, hc['HealthCheck']['Id'])
-            else:
-                create_rs(ip)
+        managed_records = []
+        for record in response["ResourceRecordSets"]:
+            if "SetIdentifier" in record and tag in record["SetIdentifier"]:
+                managed_records.append(record)
 
-        time.sleep(run_interval)
-else:
-    print("ERROR: Hosted zone ID and DNS record name variables not configured")
+        for record in managed_records:
+            if record["Type"] == "A":
+                record_name = record["Name"][:-1]
+                record_ip = record["ResourceRecords"][0]["Value"]
+
+                if record_ip in zone_ips and record_name == data[zone]["A"]:
+                    zone_ips.remove(record_ip)
+                else:
+                    cleanup_ips.append(record)
+
+            if record["Type"] == "CNAME":
+                record_value = record["ResourceRecords"][0]["Value"]
+                record_name = record["Name"].replace("\\052", "*")[:-1]
+
+                if record_name in data[zone]["C"]:
+                    if record_value == data[zone]["A"]:
+                        data[zone]["C"].remove(record_name)
+                else:
+                    cleanup_ips.append(record)
+
+        if len(zone_ips):
+            for ip in zone_ips:
+                if create_health_checks == 'True':
+                    hc = create_hc(ip)
+                    healthchecks[ip] = hc['HealthCheck']['Id']
+                create_record_set(data[zone]["A"], ip, zone)
+        else:
+            print("ZoneId:", zone, "# nothing to create")
+
+        for alias in data[zone]["C"]:
+            create_cname(alias, data[zone]["A"], zone)
+
+        cleanup_recordsets(zone, cleanup_ips)
+
+# for i in r['ResourceRecordSets']:
+#     if i['Type'] == 'A':
+#         print("Checking existing recordSet: " + str(i))
+#         if i['Name'] == base_url + ".":
+#             if i['SetIdentifier'] not in ips:
+#                 if create_health_checks == 'True':
+#                     remove_rs(i['SetIdentifier'], i['HealthCheckId'])
+#                     remove_hc(i['SetIdentifier'], i['HealthCheckId'])
+#                 else:
+#                     remove_rs(i['SetIdentifier'])
+#             else:
+#                 ips.remove(i['SetIdentifier'])
+
+# for ip in ips:
+#     if create_health_checks == 'True':
+#         hc = create_hc(ip)
+#         create_rs(ip, hc['HealthCheck']['Id'])
+#     else:
+#         create_rs(ip)
+
+# time.sleep(run_interval)

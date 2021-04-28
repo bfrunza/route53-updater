@@ -1,5 +1,5 @@
 FROM python
 
-RUN pip install boto3 kubernetes
+RUN pip install -r requirements.txt
 
 ADD src/route53-updater.py /app/
